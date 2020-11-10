@@ -1,39 +1,41 @@
 clear all
+N_iter=100; % number of iterations for each SNR
+n_ldpc=64800; % codeword length of LDPC
+R=2/5; % LDPC code rate
+k_ldpc=n_ldpc*R; % LDPC message length
+SNR=-3.5:0.1:-2.5;
 
-N_iter = 100;
-SNR = 3.5:0.1:-2.5;
-n_ldpc = 64800;
-R = 2/5;
-k_ldpc = n_ldpc*R;
-M = 4;
-
+% LDPC Encoding and Decoding Objects
 hEnc = comm.LDPCEncoder('ParityCheckMatrix',dvbs2ldpc(R));
 hDec = comm.LDPCDecoder('ParityCheckMatrix',dvbs2ldpc(R));
 
-hMod = comm.PSKModulator(M,'BitInput',true);
-
-n = 1;
-for gamma = SNR
-    [R,gamma,M]
-    hChan = comm.AWGNChannel('NoiseMethod','Signal to noise ratio (SNR)','SNR',gamma);
-    hDemod = comm.PSKDemodulator(M,'BitOutput',ture,'DecisionMethod','Approximate log-likelihood ratio','Variance',1/10^(hChan.SNR/10));
-    hError = comm.ErrorRate;
-    EE = [];
-    for counter = 1:N_iter
-        data = logical(randi([0,1],k_ldpc,1));
-        encodedData = step(hEnc,data);
-        modSignal = step(hMod,encodedData);
-        receivedSignal = step(hChan,modSignal);
-        demodSignal = step(hDemod,receivedSignal);
-        receivedBits = step(hDec,demodSignal);
-        errorStats = step(hError,data,receivedBits);
-        EE(1,counter) = errorStats(1);
-    end
-    E(1,n)=mean(EE(1,:)); % Averaging over iterations
-    n=n+1;
+% Modulator object
+M=4; % Constellation Size
+hMod = comm.PSKModulator(M, 'BitInput',true);
+n=1;
+for gamma=SNR
+ [R, gamma, M]
+ hChan = comm.AWGNChannel(...
+ 'NoiseMethod','Signal to noise ratio (SNR)','SNR',gamma);
+ hDemod = comm.PSKDemodulator(M, 'BitOutput',true,...
+ 'DecisionMethod','Approximate log-likelihood ratio', ...
+ 'Variance', 1/10^(hChan.SNR/10));
+ hError = comm.ErrorRate; % For BER calculations
+ EE=[];
+ for counter = 1:N_iter
+ data = logical(randi([0,1],k_ldpc, 1)); % Random bit generation
+ encodedData = step(hEnc,data); % LDPC encoding
+ modSignal = step(hMod, encodedData); % Modulation
+ receivedSignal = step(hChan, modSignal); % Transmission over the channel
+ demodSignal = step(hDemod, receivedSignal); % Demodulation
+ receivedBits = step(hDec, demodSignal); % LDPC decoding
+ errorStats = step(hError, data, receivedBits); % BER calculations
+ EE(1,counter)=errorStats(1);
+ end
+ E(1,n)=mean(EE(1,:)); % Averaging over iterations
+ n=n+1;
 end
 
 semilogy(SNR,E,'+')
 grid on;
-title('LDPC simulation');
-xlabel('Eb/n0 [dB]');ylabel('BER');
+title('LDPC simulation'); xlabel('Eb/N_0 [dB]'); ylabel('BER');
